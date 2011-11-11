@@ -1,6 +1,7 @@
-include $(GOROOT)/src/Make.inc
+CGO=../cgo-gccgo/cgo
 
-TARG=github.com/remyoudompheng/go-alpm
+TARGET=alpm
+
 CGOFILES=alpm.go\
 	 handle.go\
 	 error.go\
@@ -11,10 +12,18 @@ CGOFILES=alpm.go\
 GOFILES=defs.go\
 	enums.go
 
-include $(GOROOT)/src/Make.pkg
+EXTRA_GOFILES=$(patsubst %.go,_obj/%.cgo1.go,$(CGOFILES)) _obj/_cgo_gotypes.go
 
-examples:
-	gomake -C examples
+$(TARGET).o: $(CGOFILES) $(GOFILES)
+	$(CGO) -- $(CGOFILES)
+	gccgo -o $(TARGET)1.o -c $(GOFILES) $(EXTRA_GOFILES)
+	gcc -o alpm2.o -c _obj/_cgo_defun.c
+	ar cru libalpm.a alpm1.o alpm2.o
 
-format:
-	gofmt -l -s -w *.go
+test:
+	gccgo -o alpm_test alpm_test.go $(TARGET).a -lalpm
+	./alpm_test
+
+clean:
+	rm -rf *.o *.a *.so _obj _test _testmain.go *.exe _cgo* test.out build.out *.gox
+

@@ -1,9 +1,9 @@
-package alpm
+package main
 
 import (
+	. "alpm"
 	"fmt"
 	"os"
-	"testing"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 var h *Handle
 
 func init() {
-	var err error
+	var err os.Error
 	h, err = Init("/", "/var/lib/pacman")
 	if err != nil {
 		fmt.Printf("failed to Init(): %s", err)
@@ -23,28 +23,28 @@ func init() {
 	}
 }
 
-func TestVersion(t *testing.T) {
+func TestVersion() {
 	if Version() != version {
-		t.Error("verion's do not match")
+		fmt.Println("verion's do not match")
 	}
 }
 
-func TestVercmp(t *testing.T) {
+func TestVercmp() {
 	x := VerCmp("1.0-2", "2.0-1")
 	if x >= 0 {
-		t.Error("failed at checking 2.0-1 is newer than 1.0-2")
+		fmt.Println("failed at checking 2.0-1 is newer than 1.0-2")
 	}
 	x = VerCmp("1:1.0-2", "2.0-1")
 	if x <= 0 {
-		t.Error("failed at checking 2.0-1 is older than 1.0-2")
+		fmt.Println("failed at checking 2.0-1 is older than 1.0-2")
 	}
 	x = VerCmp("2.0.2-2", "2.0.2-2")
 	if x != 0 {
-		t.Error("failed at checking 2.0.2-2 is equal to itself")
+		fmt.Println("failed at checking 2.0.2-2 is equal to itself")
 	}
 }
 
-func TestRevdeps(t *testing.T) {
+func TestRevdeps() {
 	fmt.Print("Testing reverse deps of glibc...\n")
 	db, _ := h.LocalDb()
 	pkg, _ := db.GetPkg("glibc")
@@ -53,10 +53,10 @@ func TestRevdeps(t *testing.T) {
 	}
 }
 
-func TestLocalDB(t *testing.T) {
+func TestLocalDB() {
 	defer func() {
 		if recover() != nil {
-			t.Errorf("local db failed")
+			fmt.Println("local db failed")
 		}
 	}()
 	db, _ := h.LocalDb()
@@ -73,8 +73,16 @@ func TestLocalDB(t *testing.T) {
 	}
 }
 
-func TestRelease(t *testing.T) {
+func TestRelease() {
 	if err := h.Release(); err != nil {
-		t.Error(err)
+		fmt.Println(err)
 	}
+}
+
+func main() {
+	TestVersion()
+	TestVercmp()
+	TestRevdeps()
+	TestLocalDB()
+	TestRelease()
 }
