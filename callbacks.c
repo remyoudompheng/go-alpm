@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <alpm.h>
-
-void logCallback(unsigned int level, char *cstring);
+#include "_cgo_export.h"
 
 void go_alpm_log_cb(alpm_loglevel_t level, const char *fmt, va_list arg) {
   char *s = malloc(128);
@@ -13,7 +12,7 @@ void go_alpm_log_cb(alpm_loglevel_t level, const char *fmt, va_list arg) {
     s = realloc(s, length);
   }
   if (s != NULL) {
-		logCallback(level, s);
+		LogCallback(level, s);
 		free(s);
   }
 }
