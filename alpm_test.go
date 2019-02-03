@@ -25,7 +25,7 @@ func init() {
 func ExampleVersion() {
 	fmt.Println(Version())
 	// output:
-	// 11.0.0
+	// 11.0.2
 }
 
 func ExampleVerCmp() {
