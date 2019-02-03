@@ -17,6 +17,7 @@ type PacmanOption uint
 
 const (
 	ConfUseSyslog PacmanOption = 1 << iota
+	ConfColor
 	ConfShowSize
 	ConfUseDelta
 	ConfTotalDownload
@@ -27,6 +28,7 @@ const (
 
 var optionsMap = map[string]PacmanOption{
 	"UseSyslog":       ConfUseSyslog,
+	"Color":           ConfColor,
 	"ShowSize":        ConfShowSize,
 	"UseDelta":        ConfUseDelta,
 	"TotalDownload":   ConfTotalDownload,
