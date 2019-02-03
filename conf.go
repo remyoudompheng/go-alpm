@@ -36,23 +36,25 @@ var optionsMap = map[string]PacmanOption{
 }
 
 type PacmanConfig struct {
-	CacheDir     []string
-	HoldPkg      []string
-	SyncFirst    []string
-	IgnoreGroup  []string
-	IgnorePkg    []string
-	NoExtract    []string
-	NoUpgrade    []string
-	RootDir      string
-	DBPath       string
-	GPGDir       string
-	LogFile      string
-	Architecture string
-	XferCommand  string
-	CleanMethod  string
-	SigLevel     SigLevel
-	Options      PacmanOption
-	Repos        []RepoConfig
+	CacheDir           []string
+	HoldPkg            []string
+	SyncFirst          []string
+	IgnoreGroup        []string
+	IgnorePkg          []string
+	NoExtract          []string
+	NoUpgrade          []string
+	RootDir            string
+	DBPath             string
+	GPGDir             string
+	LogFile            string
+	Architecture       string
+	XferCommand        string
+	CleanMethod        string
+	SigLevel           SigLevel
+	LocalFileSigLevel  SigLevel
+	RemoteFileSigLevel SigLevel
+	Options            PacmanOption
+	Repos              []RepoConfig
 }
 
 type RepoConfig struct {
@@ -139,7 +141,6 @@ func (rdr *confReader) ParseLine() (tok iniToken, err error) {
 		}
 		return
 	}
-	panic("impossible")
 }
 
 func ParseConfig(r io.Reader) (conf PacmanConfig, err error) {
@@ -177,16 +178,10 @@ lineloop:
 				conf.Repos = append(conf.Repos, RepoConfig{})
 				curRepo = &conf.Repos[len(conf.Repos)-1]
 				curRepo.Name = line.Name
+				curRepo.SigLevel = SigUseDefault // FIXME
 			}
 		case tokenKey:
-			switch line.Name {
-			case "SigLevel":
-				// TODO: implement SigLevel parsing.
-				continue lineloop
-			case "Server":
-				curRepo.Servers = append(curRepo.Servers, line.Values...)
-				continue lineloop
-			case "Include":
+			if line.Name == "Include" {
 				f, err := os.Open(line.Values[0])
 				if err != nil {
 					err = fmt.Errorf("error while processing Include directive at line %d: %s",
@@ -197,11 +192,27 @@ lineloop:
 				rdrStack = append(rdrStack, rdr)
 				continue lineloop
 			}
-
 			if currentSection != "options" {
-				err = fmt.Errorf("option %s outside of [options] section, at line %d",
-					line.Name, rdr.Lineno)
-				return conf, err
+				switch line.Name {
+				case "SigLevel":
+					curRepo.SigLevel, err = parseSigLevel(SigUseDefault, line.Values)
+					if err != nil {
+						err = fmt.Errorf("invalid SigLevel for repo %q: %q",
+							currentSection, err)
+						return conf, err
+					}
+					continue lineloop
+				case "Server":
+					curRepo.Servers = append(curRepo.Servers, line.Values...)
+					continue lineloop
+				case "Usage":
+					// TODO: parse Usage
+					continue lineloop
+				default:
+					err = fmt.Errorf("option %s outside of [options] section, at line %d",
+						line.Name, rdr.Lineno)
+					return conf, err
+				}
 			}
 			// main options.
 			if opt, ok := optionsMap[line.Name]; ok {
@@ -212,6 +223,7 @@ lineloop:
 				fld := confReflect.FieldByName(line.Name)
 				if !fld.IsValid() {
 					err = fmt.Errorf("unknown option at line %d: %s", rdr.Lineno, line.Name)
+					return conf, err
 				}
 				switch field_p := fld.Addr().Interface().(type) {
 				case *string:
@@ -220,16 +232,81 @@ lineloop:
 				case *[]string:
 					//many valued option.
 					*field_p = append(*field_p, line.Values...)
+				case *SigLevel:
+					*field_p, err = parseSigLevel(SigUseDefault, line.Values)
+					if err != nil {
+						err = fmt.Errorf("invalid value at line %d: %s",
+							rdr.Lineno, err)
+						return conf, err
+					}
 				}
 			}
 		}
 	}
-	panic("impossible")
+}
+
+func parseSigLevel(base SigLevel, tokens []string) (lvl SigLevel, err error) {
+	lvl = base
+	for i, tok := range tokens {
+		lvl &^= SigUseDefault
+		onPkg, onDB := true, true
+		if strings.HasPrefix(tok, "Package") {
+			tok = strings.TrimPrefix(tok, "Package")
+			onDB = false
+		} else if strings.HasPrefix(tok, "Database") {
+			tok = strings.TrimPrefix(tok, "Database")
+			onPkg = false
+		}
+		switch tok {
+		case "Never":
+			if onDB {
+				lvl &^= SigDatabase
+			}
+			if onPkg {
+				lvl &^= SigPackage
+			}
+		case "Optional":
+			if onDB {
+				lvl |= SigDatabase | SigDatabaseOptional
+			}
+			if onPkg {
+				lvl |= SigPackage | SigPackageOptional
+			}
+		case "Required":
+			if onDB {
+				lvl |= SigDatabase
+				lvl &^= SigDatabaseOptional
+			}
+			if onPkg {
+				lvl |= SigPackage
+				lvl &^= SigPackageOptional
+			}
+		case "TrustedOnly":
+			if onDB {
+				lvl &^= SigDatabaseMarginalOk | SigDatabaseUnknownOk
+			}
+			if onPkg {
+				lvl &^= SigPackageMarginalOk | SigPackageUnknownOk
+			}
+		case "TrustAll":
+			if onDB {
+				lvl |= SigDatabaseMarginalOk | SigDatabaseUnknownOk
+			}
+			if onPkg {
+				lvl |= SigPackageMarginalOk | SigPackageUnknownOk
+			}
+		default:
+			return 0, fmt.Errorf("invalid signature level %s", tokens[i])
+		}
+	}
+	return lvl, nil
 }
 
 func (conf *PacmanConfig) SetDefaults() {
 	conf.RootDir = "/"
 	conf.DBPath = "/var/lib/pacman"
+	conf.LocalFileSigLevel = SigUseDefault
+	conf.RemoteFileSigLevel = SigUseDefault
 }
 
 func getArch() (string, error) {
